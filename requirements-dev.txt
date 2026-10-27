@@ -1,0 +1,10 @@
+-r requirements.txt
+httpx==0.28.1
+moto[dynamodb]==5.2.4
+pytest==9.2.0
+pytest-cov==7.1.0
+ruff==0.17.3
+mypy==2.4.0
+cfn-lint==1.58.0
+pandas==3.1.0
+certifi==2026.10.23
