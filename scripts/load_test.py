@@ -14,9 +14,6 @@ from pathlib import Path
 
 import httpx
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
-N = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
-CONCURRENCY = int(sys.argv[3]) if len(sys.argv) > 3 else 50
 SEED = Path(__file__).resolve().parents[1] / "data" / "hospitals.json"
 IDS = [r["provider_id"] for r in json.loads(SEED.read_text())]
 QUERIES = ["mass gen", "children", "saint mary", "univ med", "memorial", "kaiser", "mayo", "baptist"]
@@ -32,9 +29,9 @@ def next_path(rng: random.Random) -> str:
     return f"/rankings/ed_median_minutes?state={rng.choice(STATES)}&k=10"
 
 
-async def main() -> None:
+async def main(base: str, n: int, concurrency: int) -> None:
     rng = random.Random(42)
-    paths = [next_path(rng) for _ in range(N)]
+    paths = [next_path(rng) for _ in range(n)]
     latencies: list[float] = []
     errors = 0
     queue: asyncio.Queue[str] = asyncio.Queue()
@@ -50,20 +47,23 @@ async def main() -> None:
             latencies.append((time.perf_counter() - t) * 1000)
             errors += r.status_code >= 500
 
-    limits = httpx.Limits(max_connections=CONCURRENCY)
-    async with httpx.AsyncClient(base_url=BASE, limits=limits, timeout=30) as client:
+    limits = httpx.Limits(max_connections=concurrency)
+    async with httpx.AsyncClient(base_url=base, limits=limits, timeout=30) as client:
         start = time.perf_counter()
-        await asyncio.gather(*(worker(client) for _ in range(CONCURRENCY)))
+        await asyncio.gather(*(worker(client) for _ in range(concurrency)))
         elapsed = time.perf_counter() - start
         cache = (await client.get("/metrics")).json()["cache"]
     s = sorted(latencies)
     pct = lambda p: s[max(1, math.ceil(p / 100 * len(s))) - 1]
     print(
-        f"{N:,} requests, concurrency {CONCURRENCY}: {N / elapsed:,.0f} req/s, "
+        f"{n:,} requests, concurrency {concurrency}: {n / elapsed:,.0f} req/s, "
         f"p50 {pct(50):.1f} ms, p95 {pct(95):.1f} ms, p99 {pct(99):.1f} ms, 5xx errors {errors}, "
         f"cache hit rate {cache['hit_rate']:.1%}"
     )
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765"
+    n = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
+    concurrency = int(sys.argv[3]) if len(sys.argv) > 3 else 50
+    asyncio.run(main(base, n, concurrency))
