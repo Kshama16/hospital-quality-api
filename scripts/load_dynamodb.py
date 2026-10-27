@@ -2,6 +2,7 @@
 
 Usage: python scripts/load_dynamodb.py <table-name> [region]
 """
+
 import json
 import sys
 from pathlib import Path
